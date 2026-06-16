@@ -8,7 +8,7 @@
 
 在线文档（Read the Docs）：
 
-> **<https://llm-agent.readthedocs.io/zh-cn/latest/>**
+> **<https://agent-keytech.readthedocs.io/zh-cn/latest/>**
 
 ## 本地构建
 

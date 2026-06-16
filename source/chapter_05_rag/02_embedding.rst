@@ -44,7 +44,7 @@
 嵌入模型是如何训练的？
 =========================
 
-大多数现代嵌入模型使用**对比学习**（Contrastive Learning）训练。
+大多数现代嵌入模型使用**对比学习** （Contrastive Learning）训练。
 训练数据的格式是三元组：(query, positive_passage, negative_passage)。
 模型的训练目标是：让 query 和 positive 的向量距离更近，和 negative 的距离更远。
 
@@ -113,9 +113,9 @@
      - 长文档检索
      - 64.5
 
-**MTEB（Massive Text Embedding Benchmark）**是当前最权威的嵌入模型评测基准。
+**MTEB** （Massive Text Embedding Benchmark）是当前最权威的嵌入模型评测基准。
 但注意：MTEB 分数高的模型不一定是你的场景的最优选择。MTEB 覆盖的任务很广，
-如果你的 Agent 只需要做**检索**（Retrieval），你应该看 MTEB 的 Retrieval 子分数，
+如果你的 Agent 只需要做**检索** （Retrieval），你应该看 MTEB 的 Retrieval 子分数，
 而非总体分数。
 
 维度的权衡
@@ -237,10 +237,9 @@
    :class: tip
 
    Agent 经常需要同时处理两类检索需求：
-   1. **语义检索**："帮我找一下关于 Transformer 的论文"
-      → 密集嵌入擅长此道
-   2. **精确匹配**："查询订单 #ORD-2024-001 的状态"
-      → 稀疏嵌入精准命中
+
+   1. **语义检索**："帮我找一下关于 Transformer 的论文" → 密集嵌入擅长此道
+   2. **精确匹配**："查询订单 #ORD-2024-001 的状态" → 稀疏嵌入精准命中
 
    这就是为什么生产 RAG 系统几乎都使用**混合搜索**——两者结合，取长补短。
 

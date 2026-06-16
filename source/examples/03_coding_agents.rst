@@ -1,8 +1,7 @@
 .. _examples-coding-agents:
 
-===============================
 AI 编程 Agent：Claude Code vs Codex vs Cursor
-===============================
+==============================================
 
 2026 年 AI 编程工具进入"Agent 自治"时代。Claude Code、OpenAI Codex、Cursor
 三分天下，各自代表了**终端原生 / 模型原生 / IDE 集成** 三条不同的技术路线。

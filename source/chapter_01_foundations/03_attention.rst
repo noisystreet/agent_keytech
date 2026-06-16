@@ -60,7 +60,7 @@ Agent 的每一步推理都依赖 Attention 去"回顾"之前的上下文。
      - 信号淹没在噪声中
      - 召回率显著下降，需要外部记忆补偿
 
-这个现象被 Liu et al. 总结为 **"Lost in the Middle"**（2023）：
+这个现象被 Liu et al. 总结为 "Lost in the Middle"（2023）：
 当相关信息位于输入中间位置时，LLM 的召回率比放在开头或结尾时低很多。
 这对 Agent 意味着：
 

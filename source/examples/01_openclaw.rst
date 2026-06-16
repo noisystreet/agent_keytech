@@ -5,7 +5,7 @@ OpenClaw：开源通用 AI Agent
 ===============================
 
 OpenClaw（原名 Clawdbot → Moltbot → OpenClaw）是 2025 年末由奥地利开发者
-Peter Steinberger 创建的开源 AI Agent 框架，**60 天内斩获 35 万+ GitHub Stars**，
+Peter Steinberger 创建的开源 AI Agent 框架，**60 天内斩获 35 万+ GitHub Stars** ，
 成为 2026 年最受关注的开源项目。
 
 核心理念

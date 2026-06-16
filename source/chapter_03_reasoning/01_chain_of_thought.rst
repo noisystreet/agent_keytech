@@ -67,7 +67,7 @@ CoT 的做法是把推理过程展开：先算 24×30=720，再算 24×7=168，
        reasoning = llm.generate(prompt, temperature=0.0)
        return reasoning
 
-这个方法的优势是**零成本**（不需要准备 Few-shot 示例），对大多数推理任务
+这个方法的优势是**零成本** （不需要准备 Few-shot 示例），对大多数推理任务
 都有不错的提升。缺点是不够稳定——模型可能在某些步骤上"走偏"。
 
 2. Few-shot CoT

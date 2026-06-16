@@ -155,9 +155,9 @@ Agent 间通信模式
    :class: tip
 
    2026 年主流的 Agent 通信协议：
-   - **MCP**（Model Context Protocol）：Claude Code/Cursor 使用的工具调用协议
-   - **A2A**（Agent-to-Agent）：Google 提出的 Agent 间通信标准
-   - **GSP**（Google Agent Collaboration）：多 Agent 协作框架
+   - **MCP** （Model Context Protocol）：Claude Code/Cursor 使用的工具调用协议
+   - **A2A** （Agent-to-Agent）：Google 提出的 Agent 间通信标准
+   - **GSP** （Google Agent Collaboration）：多 Agent 协作框架
 
    选择建议：小型系统用点对点，中型系统用黑板，大型系统用混合架构。
 

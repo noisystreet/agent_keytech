@@ -50,6 +50,31 @@ Level 1：指标监控
 不是 Agent 没有抛异常就算成功，而是它完成了用户的任务。判断任务是否
 完成需要额外的逻辑，比如检查最终回答是否包含了关键信息。
 
+.. code-block:: python
+
+   # Prometheus 指标定义示例
+   from prometheus_client import Histogram, Counter, Gauge
+
+   agent_latency = Histogram(
+       "agent_run_duration_seconds",
+       "Agent 执行耗时（秒）",
+       buckets=[1, 2, 5, 10, 30, 60, 120]
+   )
+   agent_tokens = Counter(
+       "agent_tokens_total",
+       "Agent 消耗的 token 总数",
+       ["model"]
+   )
+   agent_errors = Counter(
+       "agent_errors_total",
+       "Agent 执行错误数",
+       ["error_type"]  # tool_timeout / llm_error / safety_blocked
+   )
+   active_agents = Gauge(
+       "agent_active_runs",
+       "当前正在执行的 Agent 数量"
+   )
+
 Level 2：日志记录
 ====================
 
@@ -70,7 +95,7 @@ Level 2：日志记录
                self.logger.info(f"  Result: {step.observation}")
            self.logger.info(f"  Token cost: {step.tokens}")
 
-这里有一个实用技巧：**结构化日志**。不要用 `print()` 或简单的文本日志，
+**结构化日志** 是关键。不要用 ``print()`` 或简单的文本日志，
 而是用 JSON 格式记录每步的结构化数据：
 
 .. code-block:: python
@@ -116,6 +141,39 @@ Level 3：全链路追踪
 而模型推理只占了 15%。如果没有追踪，团队可能一直在优化模型推理速度——
 完全抓错了方向。
 
+.. code-block:: python
+
+   # 集成 OpenTelemetry 进行分布式追踪
+   from opentelemetry import trace
+   from opentelemetry.trace import StatusCode
+
+   tracer = trace.get_tracer("agent")
+
+   class TracedAgent:
+       """带 OpenTelemetry 追踪的 Agent"""
+       def run(self, task: str) -> str:
+           with tracer.start_as_current_span("agent.run") as span:
+               span.set_attribute("task", task)
+               result = self._execute(task)
+
+               if result["success"]:
+                   span.set_status(StatusCode.OK)
+               else:
+                   span.set_status(StatusCode.ERROR, result["error"])
+
+               for step in result["steps"]:
+                   self._trace_step(step)
+
+               return result["output"]
+
+       def _trace_step(self, step):
+           with tracer.start_as_current_span(f"step.{step.tool or 'think'}") as span:
+               span.set_attribute("step", step.n)
+               span.set_attribute("tool", step.tool or "none")
+               span.set_attribute("latency_ms", step.latency_ms)
+               if step.error:
+                   span.set_status(StatusCode.ERROR, step.error)
+
 Level 4：执行回放
 ====================
 
@@ -142,12 +200,48 @@ Level 4：执行回放
    │ 总计：6.8s  | 3 步 | 2 次工具调用 | 1520 tokens │
    └─────────────────────────────────────────────┘
 
+告警规则设计
+================
+
+Agent 的告警规则和传统 API 不同，需要关注 Agent 特有的信号。
+
+.. code-block:: python
+
+   def alert_rules():
+       """Agent 场景的关键告警规则"""
+       return [
+           {
+               "name": "tool_timeout_high",
+               "condition": "avg(tool_latency_ms) > 10000",  # 10 秒
+               "severity": "warning",
+               "message": "工具调用平均耗时超过 10 秒",
+           },
+           {
+               "name": "agent_loop_exceeded",
+               "condition": "avg(agent_steps) > 8",
+               "severity": "warning",
+               "message": "Agent 平均执行步数超过 8 步，可能存在死循环",
+           },
+           {
+               "name": "cost_spike",
+               "condition": "sum(agent_cost_usd) > 100",
+               "severity": "critical",
+               "message": "Agent 日消耗超过 $100",
+           },
+           {
+               "name": "success_rate_drop",
+               "condition": "avg(success_rate) < 0.7",
+               "severity": "critical",
+               "message": "Agent 任务成功率低于 70%",
+           },
+       ]
+
 .. admonition:: 监控的迭代节奏
    :class: tip
 
    - **上线第一天**：Level 1 指标监控（延迟、错误率、Token 消耗）
    - **上线第一周**：加到 Level 2（完整日志），排查初始问题
-   - **稳定运行后**：加到 Level 3（追踪），做性能优化
+   - **稳定运行后**：加到 Level 3（可观测追踪），做性能优化
    - **需要调试复杂问题**：用到 Level 4（回放），重现极端场景
 
    不要一开始就上 Level 4。可观测性是"够用就好"——加多了反而增加

@@ -13,3 +13,4 @@
    02_openai_api
    03_streaming
    04_monitoring
+   05_cost_optimization

@@ -8,8 +8,21 @@
 的泛化扩展。CoT 只沿着一条推理路径前进，而 ToT 在每个推理步骤进行**多方向探索**
 并评估各分支的可行性，从而显著提升复杂推理和规划任务的成功率。
 
-从链到树
-============
+为什么要用树而不是链？
+========================
+
+我见过的读者第一次接触 ToT 时最常见的反应是："CoT 已经效果很好了，
+为什么要搞得这么复杂？"
+
+答案是：**有些问题不是"逐步推理"能解决的。**
+
+考虑这个问题："从 1 到 9 中选择三个不重复的数字，使它们的和为 15。"
+CoT 可能会试错一次——"5+4+6=15，找到了！"但如果答案是错的，CoT 没有
+回头路可走。它只能沿着当前路径走下去，越走越偏。
+
+ToT 的做法是：同时尝试多个不同的组合，快速淘汰明显错的，只深入探索
+有希望的方案。这其实就是**人类解决问题的方式**——你不会只试一条路，
+而是想好几种可能，然后排除最不靠谱的，再深入验证最有可能的。
 
 .. list-table::
    :header-rows: 1
@@ -19,17 +32,17 @@
      - 评估机制
      - 适用场景
    * - CoT
-     - 单路径
-     - 无中间评估
-     - 简单推理
+     - 单路径，无回头路
+     - 无中间评估，一步错步步错
+     - 简单推理、有标准流程的任务
    * - Self-Consistency
-     - 多路径独立采样
-     - 最终答案投票
-     - 有标准答案的任务
+     - 多路径独立采样，互不干扰
+     - 最终答案投票，不关心中间过程
+     - 有标准答案的任务、数学题
    * - ToT
-     - 树状搜索
-     - 每步评估剪枝
-     - 复杂规划、数学、搜索
+     - 树状搜索，可回溯可剪枝
+     - 每步评估，提前淘汰坏分支
+     - 复杂规划、开放域搜索、博弈
 
 核心流程
 ============
@@ -58,7 +71,6 @@ ToT 包含四个关键步骤，循环执行直到找到最终答案：
            self.max_depth = max_depth         # 最大搜索深度
 
        def solve(self, problem: str) -> str:
-           # 每个节点: {"thought": str, "value": float, "parent": Node}
            root = {"thought": problem, "value": 1.0, "parent": None}
            frontier = [root]
 
@@ -66,27 +78,22 @@ ToT 包含四个关键步骤，循环执行直到找到最终答案：
                new_frontier = []
 
                for node in frontier:
-                   # Step 1: 从当前状态扩展多个候选
                    candidates = self._expand(node, depth)
                    if not candidates:
                        continue
 
-                   # Step 2: 评估每个候选
                    for cand in candidates:
                        cand["value"] = self._evaluate(cand)
 
-                   # Step 3: 按分数降序排列，取 top-K 继续探索
                    candidates.sort(key=lambda x: x["value"], reverse=True)
                    new_frontier.extend(candidates[:self.max_branches])
 
                frontier = new_frontier
 
-               # 检查是否已有足够好的最终答案
                for node in frontier:
                    if self._is_solution(node):
                        return self._extract_answer(node)
 
-           # 返回最优路径的答案
            best = max(frontier, key=lambda x: x["value"])
            return self._extract_answer(best)
 
@@ -95,75 +102,171 @@ ToT 包含四个关键步骤，循环执行直到找到最终答案：
            prompt = (
                f"问题：{node['thought']}\n"
                f"当前进度：第 {depth + 1} 步\n"
-               f"请列出 {self.max_branches} 种不同的下一步推理方向，"
-               f"每行一个。"
+               f"请列出 {self.max_branches} 种不同的下一步推理方向，每行一个。"
            )
            response = self.llm.generate(prompt, temperature=0.8)
            branches = response.strip().split("\n")
-
            return [
                {"thought": f"{node['thought']} → {b}", "value": 0, "parent": node}
                for b in branches[:self.max_branches]
            ]
 
-       def _evaluate(self, node: Dict) -> float:
-           """评估当前推理路径的可行性"""
-           prompt = (
-               f"当前推理路径：{node['thought']}\n"
-               f"这条推理路径是否合理？请给出 0-1 之间的分数。"
-           )
-           response = self.llm.generate(prompt, temperature=0.0)
-           return float(response.strip())
+BFS vs DFS：两种搜索策略
+============================
 
-       def _is_solution(self, node: Dict) -> bool:
-           """判断是否已达到最终答案"""
-           return "答案是" in node["thought"] or "最终答案" in node["thought"]
+ToT 支持两种搜索策略，选择哪种取决于任务特点。
 
-       def _extract_answer(self, node: Dict) -> str:
-           """沿父指针回溯完整推理路径"""
-           path = []
-           current = node
-           while current:
-               path.append(current["thought"])
-               current = current["parent"]
-           return "\n".join(reversed(path))
-
-.. admonition:: BFS vs DFS
-   :class: tip
-
-   ToT 支持两种搜索策略：
-   - **广度优先（BFS）**：每层保留 top-K 节点，适合深度较浅、分支较多的任务
-   - **深度优先（DFS）**：优先深入探索最有希望的分支，可回溯，适合深度较大的任务
-
-   Agent 场景中一般推荐 BFS——Agent 任务的分支通常较多（工具选择多），
-   但推理深度有限（通常 3-5 步即可完成）。
-
-Agent 中的应用
-====================
-
-ToT 在 Agent 场景中有三个典型应用：
-
-1. **工具选择规划**：面对多个可用工具，Agent 用 ToT 探索不同工具组合的路径
-2. **多步任务分解**：复杂任务如"帮我规划一次旅行"，每个分支对应不同的方案
-3. **错误恢复**：当某个路径的执行结果不理想时，回溯到上游分支尝试其他方案
+**广度优先（BFS）**：每层保留 top-K 节点，逐层推进。
 
 .. code-block:: python
 
-   # Agent 场景：工具选择中的 ToT
+   class BFSToT(TreeOfThoughts):
+       """广度优先：每层保留最好的 K 个节点"""
+       def solve(self, problem):
+           nodes = [{"thought": problem, "value": 1.0, "depth": 0}]
+
+           for depth in range(self.max_depth):
+               # 扩展当前层的所有节点
+               all_candidates = []
+               for node in nodes:
+                   candidates = self._expand(node, depth)
+                   all_candidates.extend(candidates)
+
+               # 对所有候选评分并排序
+               for cand in all_candidates:
+                   cand["value"] = self._evaluate(cand)
+
+               all_candidates.sort(key=lambda x: x["value"], reverse=True)
+
+               # 只保留 top-K
+               nodes = all_candidates[:self.max_branches]
+
+               # 检查是否有解
+               for node in nodes:
+                   if self._is_solution(node):
+                       return self._extract_answer(node)
+
+           return self._extract_answer(nodes[0])
+
+**深度优先（DFS）**：优先深入一条最有希望的分支，失败时回溯。
+
+.. code-block:: python
+
+   class DFSToT(TreeOfThoughts):
+       """深度优先：先深入探索最有希望的分支，不行再回溯"""
+       def solve(self, node, depth=0):
+           if self._is_solution(node):
+               return self._extract_answer(node)
+
+           if depth >= self.max_depth:
+               return None
+
+           candidates = self._expand(node, depth)
+           for cand in candidates:
+               cand["value"] = self._evaluate(cand)
+
+           candidates.sort(key=lambda x: x["value"], reverse=True)
+
+           for cand in candidates:
+               result = self.solve(cand, depth + 1)
+               if result:
+                   return result
+
+           return None  # 回溯
+
+.. list-table::
+   :header-rows: 1
+
+   * - 维度
+     - BFS
+     - DFS
+   * - 内存消耗
+     - 高（需要保存整层的节点）
+     - 低（只保存当前路径）
+   * - 搜索完整性
+     - 更完整（不会漏掉浅层的解）
+     - 可能漏掉浅层分支
+   * - 适合场景
+     - 深度浅、分支多的任务
+     - 深度大、有明确探索方向
+   * - Agent 推荐
+     - 默认选择（3-5 步的任务居多）
+     - 需要长链推理时使用
+
+ToT 与 MCTS 的结合
+====================
+
+ToT 的一个重要的改进方向是引入**蒙特卡洛树搜索（MCTS）**。
+MCTS 通过模拟（rollout）来评估节点的价值，而不是直接让 LLM 打分。
+
+.. code-block:: python
+
+   class MCTSNode:
+       """MCTS 树节点"""
+       def __init__(self, state, parent=None):
+           self.state = state
+           self.parent = parent
+           self.children = []
+           self.visits = 0
+           self.value = 0.0
+
+       def ucb_score(self, exploration_weight=1.4):
+           """UCB（Upper Confidence Bound）公式"""
+           if self.visits == 0:
+               return float("inf")
+           exploitation = self.value / self.visits
+           exploration = exploration_weight * sqrt(log(self.parent.visits) / self.visits)
+           return exploitation + exploration
+
+MCTS 比纯 LLM 评估更客观——它不是问 LLM"这个方案好不好"（LLM 可能给出
+有偏见的评估），而是通过实际"尝试"一个分支来验证它的价值。
+代价是每次 rollout 都需要额外的 LLM 调用。
+
+ToT 在 Agent 中的应用
+=========================
+
+1. 工具选择规划
+------------------------------
+
+面对多个可用工具，Agent 用 ToT 探索不同工具组合的路径。
+
+.. code-block:: python
+
    task = "查一下本周 AI 领域的重大新闻，并总结成简报"
 
-   # 可能的工具组合路径
+   # ToT 生成的多条工具调用路径
    branches = [
-       "搜索新闻 → 用浏览器打开前 5 条 → 提取内容 → 总结",     # 路径 A
-       "搜索新闻 → 只打开引用最多的 3 条 → 提取 → 总结",         # 路径 B
-       "直接搜索 '本周 AI 新闻摘要' → 提取 → 总结",              # 路径 C
+       "搜索新闻 → 用浏览器打开前 5 条 → 提取内容 → 总结",
+       "搜索新闻 → 只打开引用最多的 3 条 → 提取 → 总结",
+       "直接搜索 '本周 AI 新闻摘要' → 提取 → 总结",
    ]
 
-.. admonition:: 成本考量
-   :class: warning
+2. 错误恢复
+------------------------------
 
-   ToT 的 LLM 调用量远高于 CoT——最坏情况下调用次数为 O(branches×depth)。
-   生产环境中建议限制搜索深度（depth≤3）或引入缓存机制。
+当 Agent 的某个路径执行结果不理想时，回溯到上游分支尝试其他方案。
+
+.. code-block:: python
+
+   class AgentWithToTRecovery:
+       """用 ToT 做错误恢复"""
+       def run(self, task: str) -> str:
+           root = {"path": [], "result": None, "parent": None}
+
+           while True:
+               # 尝试当前最优路径
+               current = self._best_path()
+               result = self._execute_path(current)
+
+               if result["success"]:
+                   return result["output"]
+
+               # 当前路径失败，回溯到上一个分支点
+               backtrace = self._find_alternative(current)
+               if not backtrace:
+                   return f"所有路径都失败: {result['error']}"
+
+               current = backtrace
 
 参考文献
 ============
